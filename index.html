@@ -27,9 +27,91 @@
     background: #2d3748;
     color: #fff;
     padding: 20px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
   }
+  header .left { flex: 1; min-width: 0; }
   header h1 { font-size: 20px; font-weight: 600; }
   header .count { font-size: 13px; opacity: 0.7; margin-top: 4px; }
+  #user-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+  }
+  #user-email {
+    opacity: 0.7;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #logout {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  #logout:hover { background: rgba(255,255,255,0.1); }
+
+  .auth-screen { padding: 32px 24px; }
+  .auth-screen p {
+    font-size: 14px;
+    color: #4a5568;
+    margin-bottom: 16px;
+    line-height: 1.6;
+  }
+  .auth-form { display: flex; flex-direction: column; gap: 12px; }
+  .auth-form input {
+    padding: 12px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+  }
+  .auth-form input:focus { border-color: #667eea; }
+  .auth-form button {
+    padding: 12px;
+    background: #667eea;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .auth-form button:hover:not(:disabled) { background: #5a67d8; }
+  .auth-form button:disabled { opacity: 0.6; cursor: not-allowed; }
+  #auth-message {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    display: none;
+    line-height: 1.5;
+  }
+  #auth-message.success {
+    display: block;
+    background: #c6f6d5;
+    color: #22543d;
+  }
+  #auth-message.error {
+    display: block;
+    background: #fed7d7;
+    color: #742a2a;
+  }
+  .loading {
+    padding: 60px 24px;
+    text-align: center;
+    color: #a0aec0;
+    font-size: 14px;
+  }
+
   .input-row {
     display: flex;
     flex-wrap: wrap;
@@ -180,18 +262,9 @@
     font-size: 11px;
     color: #718096;
   }
-  li .due.overdue {
-    color: #e53e3e;
-    font-weight: 600;
-  }
-  li .due.today {
-    color: #d69e2e;
-    font-weight: 600;
-  }
-  li.done .text {
-    text-decoration: line-through;
-    color: #a0aec0;
-  }
+  li .due.overdue { color: #e53e3e; font-weight: 600; }
+  li .due.today { color: #d69e2e; font-weight: 600; }
+  li.done .text { text-decoration: line-through; color: #a0aec0; }
   li.done .due { color: #cbd5e0; font-weight: normal; }
   li .delete {
     background: transparent;
@@ -231,34 +304,72 @@
 <body>
   <div class="app">
     <header>
-      <h1>Todoアプリ</h1>
-      <div class="count" id="count">0件</div>
+      <div class="left">
+        <h1>Todoアプリ</h1>
+        <div class="count" id="count">0件</div>
+      </div>
+      <div id="user-bar" hidden>
+        <span id="user-email"></span>
+        <button id="logout">ログアウト</button>
+      </div>
     </header>
-    <form class="input-row" id="form">
-      <input type="text" id="new-todo" placeholder="やることを入力…" autocomplete="off" autofocus>
-      <input type="date" id="new-due" title="期限（任意）">
-      <input type="text" id="new-category" placeholder="カテゴリ（任意）" list="category-list" autocomplete="off">
-      <datalist id="category-list"></datalist>
-      <button type="submit" id="add-btn">追加</button>
-    </form>
-    <div class="filters">
-      <button class="filter-btn active" data-filter="all">すべて</button>
-      <button class="filter-btn" data-filter="active">未完了</button>
-      <button class="filter-btn" data-filter="done">完了</button>
+
+    <div class="loading" id="loading">読み込み中…</div>
+
+    <div class="auth-screen" id="auth-screen" hidden>
+      <p>メールアドレスを入力すると、ログイン用のリンクをお送りします。リンクをクリックするとログイン完了です。</p>
+      <form class="auth-form" id="auth-form">
+        <input type="email" id="email" placeholder="you@example.com" required autocomplete="email">
+        <button type="submit" id="auth-btn">マジックリンクを送信</button>
+      </form>
+      <div id="auth-message"></div>
     </div>
-    <div class="category-filters" id="category-filters"></div>
-    <ul id="list"></ul>
-    <div class="footer">
-      <span id="remaining">残り 0 件</span>
-      <button id="clear-completed">完了済みを削除</button>
+
+    <div id="todo-screen" hidden>
+      <form class="input-row" id="form">
+        <input type="text" id="new-todo" placeholder="やることを入力…" autocomplete="off">
+        <input type="date" id="new-due" title="期限（任意）">
+        <input type="text" id="new-category" placeholder="カテゴリ（任意）" list="category-list" autocomplete="off">
+        <datalist id="category-list"></datalist>
+        <button type="submit" id="add-btn">追加</button>
+      </form>
+      <div class="filters">
+        <button class="filter-btn active" data-filter="all">すべて</button>
+        <button class="filter-btn" data-filter="active">未完了</button>
+        <button class="filter-btn" data-filter="done">完了</button>
+      </div>
+      <div class="category-filters" id="category-filters"></div>
+      <ul id="list"></ul>
+      <div class="footer">
+        <span id="remaining">残り 0 件</span>
+        <button id="clear-completed">完了済みを削除</button>
+      </div>
     </div>
   </div>
 
-<script>
-  const STORAGE_KEY = 'todo-app-items';
-  let todos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+<script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+  const SUPABASE_URL = 'https://wbxqnmmczhrbpugbkejz.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_accgIXrCeI803EgukIJjjg_21KvYBCB';
+  const LEGACY_KEY = 'todo-app-items';
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  let todos = [];
   let filter = 'all';
   let categoryFilter = '';
+  let realtimeChannel = null;
+
+  const loadingEl = document.getElementById('loading');
+  const authScreenEl = document.getElementById('auth-screen');
+  const todoScreenEl = document.getElementById('todo-screen');
+  const userBarEl = document.getElementById('user-bar');
+  const userEmailEl = document.getElementById('user-email');
+  const authFormEl = document.getElementById('auth-form');
+  const emailEl = document.getElementById('email');
+  const authBtnEl = document.getElementById('auth-btn');
+  const authMessageEl = document.getElementById('auth-message');
 
   const listEl = document.getElementById('list');
   const formEl = document.getElementById('form');
@@ -275,44 +386,33 @@
     for (let i = 0; i < name.length; i++) {
       h = (h * 31 + name.charCodeAt(i)) >>> 0;
     }
-    const hue = h % 360;
-    return `hsl(${hue}, 65%, 45%)`;
+    return `hsl(${h % 360}, 65%, 45%)`;
   }
 
   function todayStr() {
     const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
   function formatDue(due) {
     if (!due) return null;
     const today = todayStr();
-    const [y, m, d] = due.split('-');
+    const [, m, d] = due.split('-');
     const label = `${parseInt(m, 10)}/${parseInt(d, 10)}`;
     let cls = '';
-    if (due < today) cls = 'overdue';
-    else if (due === today) cls = 'today';
     let prefix = '期限: ';
-    if (due === today) prefix = '今日: ';
+    if (due === today) { cls = 'today'; prefix = '今日: '; }
     else if (due < today) {
+      cls = 'overdue';
       const diff = Math.floor((new Date(today) - new Date(due)) / 86400000);
       prefix = `${diff}日経過: `;
     }
     return { text: prefix + label, cls };
   }
 
-  function save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
-  }
-
   function uniqueCategories() {
     const set = new Set();
-    for (const t of todos) {
-      if (t.category) set.add(t.category);
-    }
+    for (const t of todos) if (t.category) set.add(t.category);
     return [...set].sort((a, b) => a.localeCompare(b, 'ja'));
   }
 
@@ -363,6 +463,7 @@
     renderCategoryFilters();
     renderDatalist();
     listEl.innerHTML = '';
+
     if (filtered.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'empty';
@@ -429,33 +530,132 @@
     remainingEl.textContent = `残り ${remaining} 件`;
   }
 
-  function add(text, due, category) {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    todos.push({
-      id: Date.now() + Math.random(),
-      text: trimmed,
-      due: due || '',
-      category: (category || '').trim(),
-      done: false,
-    });
-    save();
+  async function loadTodos() {
+    const { data, error } = await supabase
+      .from('todos')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (error) {
+      console.error('読み込み失敗:', error);
+      return;
+    }
+    todos = data || [];
     render();
   }
 
-  function toggle(id) {
+  async function add(text, due, category) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const row = {
+      text: trimmed,
+      due: due || null,
+      category: (category || '').trim() || null,
+      done: false,
+    };
+    const { data, error } = await supabase.from('todos').insert(row).select().single();
+    if (error) {
+      console.error('追加失敗:', error);
+      alert('追加に失敗しました: ' + error.message);
+      return;
+    }
+    todos.push(data);
+    render();
+  }
+
+  async function toggle(id) {
     const todo = todos.find(t => t.id === id);
-    if (todo) {
-      todo.done = !todo.done;
-      save();
+    if (!todo) return;
+    const newDone = !todo.done;
+    todo.done = newDone;
+    render();
+    const { error } = await supabase.from('todos').update({ done: newDone }).eq('id', id);
+    if (error) {
+      console.error('更新失敗:', error);
+      todo.done = !newDone;
       render();
     }
   }
 
-  function remove(id) {
+  async function remove(id) {
+    const prev = todos;
     todos = todos.filter(t => t.id !== id);
-    save();
     render();
+    const { error } = await supabase.from('todos').delete().eq('id', id);
+    if (error) {
+      console.error('削除失敗:', error);
+      todos = prev;
+      render();
+    }
+  }
+
+  async function clearCompleted() {
+    const completedIds = todos.filter(t => t.done).map(t => t.id);
+    if (completedIds.length === 0) return;
+    const prev = todos;
+    todos = todos.filter(t => !t.done);
+    render();
+    const { error } = await supabase.from('todos').delete().in('id', completedIds);
+    if (error) {
+      console.error('削除失敗:', error);
+      todos = prev;
+      render();
+    }
+  }
+
+  async function migrateLocalStorageIfNeeded() {
+    const raw = localStorage.getItem(LEGACY_KEY);
+    if (!raw) return;
+    let local;
+    try { local = JSON.parse(raw); } catch { return; }
+    if (!Array.isArray(local) || local.length === 0) {
+      localStorage.removeItem(LEGACY_KEY);
+      return;
+    }
+    const rows = local.map(t => ({
+      text: t.text,
+      due: t.due || null,
+      category: (t.category || '').trim() || null,
+      done: !!t.done,
+    }));
+    const { error } = await supabase.from('todos').insert(rows);
+    if (!error) {
+      localStorage.removeItem(LEGACY_KEY);
+    } else {
+      console.error('移行失敗:', error);
+    }
+  }
+
+  function showScreen(screen) {
+    loadingEl.hidden = screen !== 'loading';
+    authScreenEl.hidden = screen !== 'auth';
+    todoScreenEl.hidden = screen !== 'todo';
+    userBarEl.hidden = screen !== 'todo';
+  }
+
+  async function enterAppForUser(user) {
+    userEmailEl.textContent = user.email || '';
+    showScreen('todo');
+    await migrateLocalStorageIfNeeded();
+    await loadTodos();
+
+    if (realtimeChannel) {
+      await supabase.removeChannel(realtimeChannel);
+    }
+    realtimeChannel = supabase
+      .channel('todos-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'todos' }, () => {
+        loadTodos();
+      })
+      .subscribe();
+  }
+
+  async function exitApp() {
+    if (realtimeChannel) {
+      await supabase.removeChannel(realtimeChannel);
+      realtimeChannel = null;
+    }
+    todos = [];
+    showScreen('auth');
   }
 
   formEl.addEventListener('submit', e => {
@@ -476,13 +676,54 @@
     });
   });
 
-  document.getElementById('clear-completed').addEventListener('click', () => {
-    todos = todos.filter(t => !t.done);
-    save();
-    render();
+  document.getElementById('clear-completed').addEventListener('click', clearCompleted);
+
+  authFormEl.addEventListener('submit', async e => {
+    e.preventDefault();
+    const email = emailEl.value.trim();
+    if (!email) return;
+    authBtnEl.disabled = true;
+    authBtnEl.textContent = '送信中…';
+    authMessageEl.className = '';
+    authMessageEl.textContent = '';
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.href.split('#')[0].split('?')[0] },
+    });
+
+    authBtnEl.disabled = false;
+    authBtnEl.textContent = 'マジックリンクを送信';
+
+    if (error) {
+      authMessageEl.className = 'error';
+      authMessageEl.textContent = '送信失敗: ' + error.message;
+    } else {
+      authMessageEl.className = 'success';
+      authMessageEl.textContent = `${email} にログイン用のリンクを送信しました。メールを確認してください。`;
+    }
   });
 
-  render();
+  document.getElementById('logout').addEventListener('click', async () => {
+    await supabase.auth.signOut();
+  });
+
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (session?.user) {
+      enterAppForUser(session.user);
+    } else {
+      exitApp();
+    }
+  });
+
+  (async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      enterAppForUser(session.user);
+    } else {
+      showScreen('auth');
+    }
+  })();
 </script>
 </body>
 </html>
