@@ -450,6 +450,126 @@
     outline: 2px solid #667eea;
     outline-offset: -2px;
   }
+
+  .stats { padding: 16px; }
+  .year-switcher {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .year-switcher button {
+    background: transparent;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 4px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #4a5568;
+    line-height: 1;
+  }
+  .year-switcher button:hover:not(:disabled) { background: #f7fafc; }
+  .year-switcher button:disabled { opacity: 0.3; cursor: not-allowed; }
+  .year-label {
+    font-size: 15px;
+    font-weight: 600;
+    color: #2d3748;
+    min-width: 110px;
+    text-align: center;
+  }
+  .stats-section {
+    margin-bottom: 14px;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .stats-section h3 {
+    font-size: 12px;
+    font-weight: 600;
+    color: #718096;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .summary-row {
+    display: flex;
+    justify-content: space-around;
+    text-align: center;
+    gap: 8px;
+  }
+  .summary-row .item { flex: 1; }
+  .summary-row .num {
+    font-size: 22px;
+    font-weight: 700;
+    color: #2d3748;
+    line-height: 1.2;
+  }
+  .summary-row .num.warn { color: #e53e3e; }
+  .summary-row .num.ok { color: #38a169; }
+  .summary-row .lbl {
+    font-size: 11px;
+    color: #718096;
+    margin-top: 2px;
+  }
+  .stats-bar {
+    background: #edf2f7;
+    border-radius: 999px;
+    overflow: hidden;
+    height: 6px;
+    margin-top: 12px;
+  }
+  .stats-bar .fill {
+    height: 100%;
+    background: #48bb78;
+    transition: width 0.3s;
+  }
+  .stats-bar-label {
+    text-align: center;
+    font-size: 11px;
+    color: #718096;
+    margin-top: 6px;
+  }
+  .stats-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    font-size: 13px;
+    color: #2d3748;
+    gap: 8px;
+  }
+  .stats-row + .stats-row { border-top: 1px solid #f7fafc; }
+  .stats-row .label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+  .stats-row .label .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .stats-row .label .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .stats-row .value {
+    color: #4a5568;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .stats-row .value .pct { color: #a0aec0; margin-left: 6px; }
+  .stats-empty {
+    padding: 24px;
+    text-align: center;
+    color: #a0aec0;
+    font-size: 13px;
+  }
   .calendar-task.overdue:not(.has-cat):not(.done) {
     background: #fed7d7;
     color: #742a2a;
@@ -503,6 +623,7 @@
       <div class="view-toggle">
         <button class="view-btn active" data-view="list">リスト</button>
         <button class="view-btn" data-view="calendar">カレンダー</button>
+        <button class="view-btn" data-view="stats">統計</button>
       </div>
       <div id="list-view">
         <ul id="list"></ul>
@@ -515,6 +636,16 @@
             <button id="cal-next" title="次月">›</button>
           </div>
           <div class="calendar-grid" id="cal-grid"></div>
+        </div>
+      </div>
+      <div id="stats-view" hidden>
+        <div class="stats">
+          <div class="year-switcher">
+            <button id="year-prev" title="前年度">‹</button>
+            <span class="year-label" id="year-label"></span>
+            <button id="year-next" title="次年度">›</button>
+          </div>
+          <div id="stats-content"></div>
         </div>
       </div>
       <div class="footer">
@@ -538,6 +669,7 @@
   let categoryFilter = '';
   let view = 'list';
   let calendarMonth = (() => { const d = new Date(); d.setDate(1); return d; })();
+  let statsYear = null;
   let realtimeChannel = null;
 
   const loadingEl = document.getElementById('loading');
@@ -553,6 +685,10 @@
   const listEl = document.getElementById('list');
   const listViewEl = document.getElementById('list-view');
   const calendarViewEl = document.getElementById('calendar-view');
+  const statsViewEl = document.getElementById('stats-view');
+  const statsContentEl = document.getElementById('stats-content');
+  const yearLabelEl = document.getElementById('year-label');
+  const filtersEl = document.querySelector('.filters');
   const calGridEl = document.getElementById('cal-grid');
   const calTitleEl = document.getElementById('cal-title');
   const formEl = document.getElementById('form');
@@ -740,6 +876,141 @@
     }
   }
 
+  function fiscalYearOf(dateStrOrDate) {
+    const d = typeof dateStrOrDate === 'string' ? new Date(dateStrOrDate) : dateStrOrDate;
+    return d.getMonth() < 3 ? d.getFullYear() - 1 : d.getFullYear();
+  }
+
+  function inFiscalYear(dateStr, year) {
+    if (!dateStr) return false;
+    const ds = dateStr.slice(0, 10);
+    return ds >= `${year}-04-01` && ds < `${year + 1}-04-01`;
+  }
+
+  function availableFiscalYears() {
+    const years = new Set();
+    for (const t of todos) {
+      if (t.created_at) years.add(fiscalYearOf(t.created_at));
+    }
+    years.add(fiscalYearOf(new Date()));
+    return [...years].sort((a, b) => a - b);
+  }
+
+  function renderStats() {
+    if (statsYear === null) statsYear = fiscalYearOf(new Date());
+    const years = availableFiscalYears();
+    const minY = years[0];
+    const maxY = years[years.length - 1];
+
+    yearLabelEl.textContent = `${statsYear}年度`;
+    document.getElementById('year-prev').disabled = statsYear <= minY;
+    document.getElementById('year-next').disabled = statsYear >= maxY;
+
+    const yearTodos = todos.filter(t => inFiscalYear(t.created_at, statsYear));
+
+    statsContentEl.innerHTML = '';
+
+    if (yearTodos.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'stats-empty';
+      empty.textContent = `${statsYear}年度に登録されたタスクはありません`;
+      statsContentEl.appendChild(empty);
+      return;
+    }
+
+    const total = yearTodos.length;
+    const done = yearTodos.filter(t => t.done).length;
+    const active = total - done;
+    const rate = total ? (done / total * 100) : 0;
+
+    const sec1 = document.createElement('div');
+    sec1.className = 'stats-section';
+    sec1.innerHTML = `
+      <h3>登録状況</h3>
+      <div class="summary-row">
+        <div class="item"><div class="num">${total}</div><div class="lbl">登録</div></div>
+        <div class="item"><div class="num ok">${done}</div><div class="lbl">完了</div></div>
+        <div class="item"><div class="num">${active}</div><div class="lbl">未完了</div></div>
+      </div>
+      <div class="stats-bar"><div class="fill" style="width:${rate}%"></div></div>
+      <div class="stats-bar-label">完了率 ${rate.toFixed(1)}%</div>
+    `;
+    statsContentEl.appendChild(sec1);
+
+    const byCat = new Map();
+    for (const t of yearTodos) {
+      const key = t.category || '';
+      if (!byCat.has(key)) byCat.set(key, { total: 0, done: 0 });
+      const v = byCat.get(key);
+      v.total++;
+      if (t.done) v.done++;
+    }
+    const sortedCats = [...byCat.entries()].sort((a, b) => b[1].total - a[1].total);
+
+    const sec2 = document.createElement('div');
+    sec2.className = 'stats-section';
+    const h2 = document.createElement('h3');
+    h2.textContent = '分類ごとの統計';
+    sec2.appendChild(h2);
+    for (const [cat, v] of sortedCats) {
+      const row = document.createElement('div');
+      row.className = 'stats-row';
+      const label = document.createElement('span');
+      label.className = 'label';
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = cat ? categoryColor(cat) : '#cbd5e0';
+      label.appendChild(dot);
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = cat || '(未分類)';
+      label.appendChild(name);
+      const value = document.createElement('span');
+      value.className = 'value';
+      const pct = v.total ? (v.done / v.total * 100).toFixed(0) : 0;
+      value.innerHTML = `${v.total}件 (完了 ${v.done})<span class="pct">${pct}%</span>`;
+      row.append(label, value);
+      sec2.appendChild(row);
+    }
+    statsContentEl.appendChild(sec2);
+
+    const today = todayStr();
+    const overdue = yearTodos.filter(t => t.due && t.due < today && !t.done);
+    const buckets = { '1〜7日遅れ': 0, '8〜30日遅れ': 0, '31日以上': 0 };
+    for (const t of overdue) {
+      const days = Math.floor((new Date(today) - new Date(t.due)) / 86400000);
+      if (days <= 7) buckets['1〜7日遅れ']++;
+      else if (days <= 30) buckets['8〜30日遅れ']++;
+      else buckets['31日以上']++;
+    }
+    const noDue = yearTodos.filter(t => !t.due && !t.done).length;
+
+    const sec3 = document.createElement('div');
+    sec3.className = 'stats-section';
+    const h3el = document.createElement('h3');
+    h3el.textContent = '進捗遅れ';
+    sec3.appendChild(h3el);
+
+    const summary = document.createElement('div');
+    summary.className = 'summary-row';
+    summary.innerHTML = `
+      <div class="item"><div class="num ${overdue.length ? 'warn' : ''}">${overdue.length}</div><div class="lbl">期限切れ</div></div>
+      <div class="item"><div class="num">${noDue}</div><div class="lbl">期限未設定</div></div>
+    `;
+    sec3.appendChild(summary);
+
+    if (overdue.length > 0) {
+      for (const [k, v] of Object.entries(buckets)) {
+        if (v === 0) continue;
+        const row = document.createElement('div');
+        row.className = 'stats-row';
+        row.innerHTML = `<span class="label"><span class="name">${k}</span></span><span class="value">${v}件</span>`;
+        sec3.appendChild(row);
+      }
+    }
+    statsContentEl.appendChild(sec3);
+  }
+
   function render() {
     if (categoryFilter && !todos.some(t => t.category === categoryFilter)) {
       categoryFilter = '';
@@ -751,6 +1022,8 @@
 
     if (view === 'calendar') {
       renderCalendar();
+    } else if (view === 'stats') {
+      renderStats();
     }
 
     listEl.innerHTML = '';
@@ -1064,6 +1337,9 @@
       view = btn.dataset.view;
       listViewEl.hidden = view !== 'list';
       calendarViewEl.hidden = view !== 'calendar';
+      statsViewEl.hidden = view !== 'stats';
+      filtersEl.hidden = view === 'stats';
+      categoryFiltersEl.style.display = view === 'stats' ? 'none' : '';
       render();
     });
   });
@@ -1075,6 +1351,17 @@
   document.getElementById('cal-next').addEventListener('click', () => {
     calendarMonth.setMonth(calendarMonth.getMonth() + 1);
     renderCalendar();
+  });
+
+  document.getElementById('year-prev').addEventListener('click', () => {
+    if (statsYear === null) statsYear = fiscalYearOf(new Date());
+    statsYear--;
+    renderStats();
+  });
+  document.getElementById('year-next').addEventListener('click', () => {
+    if (statsYear === null) statsYear = fiscalYearOf(new Date());
+    statsYear++;
+    renderStats();
   });
 
   document.getElementById('clear-completed').addEventListener('click', clearCompleted);
