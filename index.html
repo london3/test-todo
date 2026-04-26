@@ -247,7 +247,46 @@
     font-size: 14px;
     color: #2d3748;
     word-break: break-word;
+    cursor: text;
+    border-radius: 4px;
+    padding: 1px 4px;
+    margin: -1px -4px;
   }
+  li .text:hover { background: #f7fafc; }
+  li.done .text:hover { background: transparent; }
+  li .due { cursor: pointer; }
+  li .due:hover { text-decoration: underline; }
+  .edit-text-input {
+    flex: 1;
+    font-size: 14px;
+    padding: 4px 8px;
+    border: 1px solid #667eea;
+    border-radius: 4px;
+    outline: none;
+    font-family: inherit;
+    color: #2d3748;
+    background: #fff;
+  }
+  .edit-due-input {
+    font-size: 11px;
+    padding: 2px 6px;
+    border: 1px solid #667eea;
+    border-radius: 4px;
+    outline: none;
+    font-family: inherit;
+    color: #4a5568;
+  }
+  .add-due-btn {
+    font-size: 11px;
+    color: #a0aec0;
+    background: transparent;
+    border: 1px dashed #cbd5e0;
+    padding: 1px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    align-self: flex-start;
+  }
+  .add-due-btn:hover { color: #667eea; border-color: #667eea; }
   li .badge {
     display: inline-block;
     padding: 1px 8px;
@@ -699,6 +738,8 @@
         const text = document.createElement('span');
         text.className = 'text';
         text.textContent = todo.text;
+        text.title = 'クリックで編集';
+        text.addEventListener('click', () => editText(todo, text));
         textRow.appendChild(text);
 
         if (todo.category) {
@@ -722,7 +763,16 @@
           const dueLabel = document.createElement('span');
           dueLabel.className = 'due' + (dueInfo.cls ? ' ' + dueInfo.cls : '');
           dueLabel.textContent = dueInfo.text;
+          dueLabel.title = 'クリックで期限を変更';
+          dueLabel.addEventListener('click', () => editDue(todo, dueLabel));
           body.appendChild(dueLabel);
+        } else {
+          const addDue = document.createElement('button');
+          addDue.type = 'button';
+          addDue.className = 'add-due-btn';
+          addDue.textContent = '+ 期限';
+          addDue.addEventListener('click', () => editDue(todo, addDue));
+          body.appendChild(addDue);
         }
 
         const del = document.createElement('button');
@@ -784,6 +834,85 @@
       console.error('更新失敗:', error);
       todo.done = !newDone;
       render();
+    }
+  }
+
+  function editText(todo, textEl) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'edit-text-input';
+    input.value = todo.text;
+    textEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let finished = false;
+    const finish = (save) => {
+      if (finished) return;
+      finished = true;
+      if (save) {
+        const newText = input.value.trim();
+        if (newText && newText !== todo.text) {
+          updateField(todo.id, { text: newText });
+          return;
+        }
+      }
+      render();
+    };
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
+  }
+
+  function editDue(todo, anchorEl) {
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.className = 'edit-due-input';
+    input.value = todo.due || '';
+    anchorEl.replaceWith(input);
+    input.focus();
+    if (input.showPicker) {
+      try { input.showPicker(); } catch {}
+    }
+
+    let finished = false;
+    const finish = (save) => {
+      if (finished) return;
+      finished = true;
+      if (save) {
+        const newDue = input.value || null;
+        if (newDue !== (todo.due || null)) {
+          updateField(todo.id, { due: newDue });
+          return;
+        }
+      }
+      render();
+    };
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { finish(false); }
+    });
+    input.addEventListener('change', () => finish(true));
+    input.addEventListener('blur', () => finish(true));
+  }
+
+  async function updateField(id, fields) {
+    const todo = todos.find(t => t.id === id);
+    if (!todo) return;
+    const before = {};
+    for (const k of Object.keys(fields)) before[k] = todo[k];
+    Object.assign(todo, fields);
+    render();
+    const { error } = await supabase.from('todos').update(fields).eq('id', id);
+    if (error) {
+      console.error('更新失敗:', error);
+      Object.assign(todo, before);
+      render();
+      alert('更新に失敗しました: ' + error.message);
     }
   }
 
