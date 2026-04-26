@@ -58,6 +58,18 @@
     transition: border-color 0.15s;
   }
   #new-due:focus { border-color: #667eea; }
+  #new-category {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #4a5568;
+    outline: none;
+    transition: border-color 0.15s;
+    min-width: 0;
+  }
+  #new-category:focus { border-color: #667eea; }
   #add-btn {
     padding: 10px 18px;
     background: #667eea;
@@ -72,6 +84,7 @@
   #add-btn:hover { background: #5a67d8; }
   .filters {
     display: flex;
+    flex-wrap: wrap;
     padding: 12px 16px;
     gap: 8px;
     border-bottom: 1px solid #edf2f7;
@@ -89,6 +102,36 @@
     background: #667eea;
     color: #fff;
     border-color: #667eea;
+  }
+  .category-filters {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 8px 16px 12px;
+    gap: 6px;
+    border-bottom: 1px solid #edf2f7;
+  }
+  .category-filters:empty { display: none; }
+  .cat-btn {
+    padding: 4px 10px;
+    background: transparent;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    font-size: 11px;
+    color: #4a5568;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .cat-btn .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .cat-btn.active {
+    background: #2d3748;
+    color: #fff;
+    border-color: #2d3748;
   }
   ul { list-style: none; }
   li {
@@ -112,11 +155,27 @@
     gap: 2px;
     min-width: 0;
   }
+  li .text-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
   li .text {
     font-size: 14px;
     color: #2d3748;
     word-break: break-word;
   }
+  li .badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  li.done .badge { opacity: 0.5; }
   li .due {
     font-size: 11px;
     color: #718096;
@@ -178,6 +237,8 @@
     <form class="input-row" id="form">
       <input type="text" id="new-todo" placeholder="やることを入力…" autocomplete="off" autofocus>
       <input type="date" id="new-due" title="期限（任意）">
+      <input type="text" id="new-category" placeholder="カテゴリ（任意）" list="category-list" autocomplete="off">
+      <datalist id="category-list"></datalist>
       <button type="submit" id="add-btn">追加</button>
     </form>
     <div class="filters">
@@ -185,6 +246,7 @@
       <button class="filter-btn" data-filter="active">未完了</button>
       <button class="filter-btn" data-filter="done">完了</button>
     </div>
+    <div class="category-filters" id="category-filters"></div>
     <ul id="list"></ul>
     <div class="footer">
       <span id="remaining">残り 0 件</span>
@@ -196,13 +258,26 @@
   const STORAGE_KEY = 'todo-app-items';
   let todos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
   let filter = 'all';
+  let categoryFilter = '';
 
   const listEl = document.getElementById('list');
   const formEl = document.getElementById('form');
   const inputEl = document.getElementById('new-todo');
-  const dueEl = document.getElementById('new-due');
+  const dueInputEl = document.getElementById('new-due');
+  const categoryInputEl = document.getElementById('new-category');
+  const categoryListEl = document.getElementById('category-list');
+  const categoryFiltersEl = document.getElementById('category-filters');
   const countEl = document.getElementById('count');
   const remainingEl = document.getElementById('remaining');
+
+  function categoryColor(name) {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) {
+      h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    }
+    const hue = h % 360;
+    return `hsl(${hue}, 65%, 45%)`;
+  }
 
   function todayStr() {
     const d = new Date();
@@ -233,13 +308,60 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
   }
 
+  function uniqueCategories() {
+    const set = new Set();
+    for (const t of todos) {
+      if (t.category) set.add(t.category);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, 'ja'));
+  }
+
+  function renderCategoryFilters() {
+    const cats = uniqueCategories();
+    categoryFiltersEl.innerHTML = '';
+    if (cats.length === 0) return;
+
+    const allBtn = document.createElement('button');
+    allBtn.className = 'cat-btn' + (categoryFilter === '' ? ' active' : '');
+    allBtn.textContent = '全カテゴリ';
+    allBtn.addEventListener('click', () => { categoryFilter = ''; render(); });
+    categoryFiltersEl.appendChild(allBtn);
+
+    for (const cat of cats) {
+      const btn = document.createElement('button');
+      btn.className = 'cat-btn' + (categoryFilter === cat ? ' active' : '');
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = categoryColor(cat);
+      btn.appendChild(dot);
+      btn.appendChild(document.createTextNode(cat));
+      btn.addEventListener('click', () => { categoryFilter = cat; render(); });
+      categoryFiltersEl.appendChild(btn);
+    }
+  }
+
+  function renderDatalist() {
+    categoryListEl.innerHTML = '';
+    for (const cat of uniqueCategories()) {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      categoryListEl.appendChild(opt);
+    }
+  }
+
   function render() {
+    if (categoryFilter && !todos.some(t => t.category === categoryFilter)) {
+      categoryFilter = '';
+    }
     const filtered = todos.filter(t => {
-      if (filter === 'active') return !t.done;
-      if (filter === 'done') return t.done;
+      if (filter === 'active' && t.done) return false;
+      if (filter === 'done' && !t.done) return false;
+      if (categoryFilter && t.category !== categoryFilter) return false;
       return true;
     });
 
+    renderCategoryFilters();
+    renderDatalist();
     listEl.innerHTML = '';
     if (filtered.length === 0) {
       const empty = document.createElement('div');
@@ -259,17 +381,36 @@
         const body = document.createElement('div');
         body.className = 'body';
 
+        const textRow = document.createElement('div');
+        textRow.className = 'text-row';
+
         const text = document.createElement('span');
         text.className = 'text';
         text.textContent = todo.text;
-        body.appendChild(text);
+        textRow.appendChild(text);
+
+        if (todo.category) {
+          const badge = document.createElement('span');
+          badge.className = 'badge';
+          badge.textContent = todo.category;
+          badge.style.background = categoryColor(todo.category);
+          badge.style.cursor = 'pointer';
+          badge.title = `「${todo.category}」で絞り込む`;
+          badge.addEventListener('click', () => {
+            categoryFilter = categoryFilter === todo.category ? '' : todo.category;
+            render();
+          });
+          textRow.appendChild(badge);
+        }
+
+        body.appendChild(textRow);
 
         const dueInfo = formatDue(todo.due);
         if (dueInfo) {
-          const dueEl = document.createElement('span');
-          dueEl.className = 'due' + (dueInfo.cls ? ' ' + dueInfo.cls : '');
-          dueEl.textContent = dueInfo.text;
-          body.appendChild(dueEl);
+          const dueLabel = document.createElement('span');
+          dueLabel.className = 'due' + (dueInfo.cls ? ' ' + dueInfo.cls : '');
+          dueLabel.textContent = dueInfo.text;
+          body.appendChild(dueLabel);
         }
 
         const del = document.createElement('button');
@@ -288,10 +429,16 @@
     remainingEl.textContent = `残り ${remaining} 件`;
   }
 
-  function add(text, due) {
+  function add(text, due, category) {
     const trimmed = text.trim();
     if (!trimmed) return;
-    todos.push({ id: Date.now() + Math.random(), text: trimmed, due: due || '', done: false });
+    todos.push({
+      id: Date.now() + Math.random(),
+      text: trimmed,
+      due: due || '',
+      category: (category || '').trim(),
+      done: false,
+    });
     save();
     render();
   }
@@ -313,9 +460,10 @@
 
   formEl.addEventListener('submit', e => {
     e.preventDefault();
-    add(inputEl.value, dueEl.value);
+    add(inputEl.value, dueInputEl.value, categoryInputEl.value);
     inputEl.value = '';
-    dueEl.value = '';
+    dueInputEl.value = '';
+    categoryInputEl.value = '';
     inputEl.focus();
   });
 
