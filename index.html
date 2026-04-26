@@ -32,12 +32,13 @@
   header .count { font-size: 13px; opacity: 0.7; margin-top: 4px; }
   .input-row {
     display: flex;
+    flex-wrap: wrap;
     padding: 16px;
     gap: 8px;
     border-bottom: 1px solid #edf2f7;
   }
   #new-todo {
-    flex: 1;
+    flex: 1 1 100%;
     padding: 10px 14px;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
@@ -46,6 +47,17 @@
     transition: border-color 0.15s;
   }
   #new-todo:focus { border-color: #667eea; }
+  #new-due {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #4a5568;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  #new-due:focus { border-color: #667eea; }
   #add-btn {
     padding: 10px 18px;
     background: #667eea;
@@ -93,16 +105,35 @@
     cursor: pointer;
     accent-color: #667eea;
   }
-  li .text {
+  li .body {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  li .text {
     font-size: 14px;
     color: #2d3748;
     word-break: break-word;
+  }
+  li .due {
+    font-size: 11px;
+    color: #718096;
+  }
+  li .due.overdue {
+    color: #e53e3e;
+    font-weight: 600;
+  }
+  li .due.today {
+    color: #d69e2e;
+    font-weight: 600;
   }
   li.done .text {
     text-decoration: line-through;
     color: #a0aec0;
   }
+  li.done .due { color: #cbd5e0; font-weight: normal; }
   li .delete {
     background: transparent;
     border: none;
@@ -146,6 +177,7 @@
     </header>
     <form class="input-row" id="form">
       <input type="text" id="new-todo" placeholder="やることを入力…" autocomplete="off" autofocus>
+      <input type="date" id="new-due" title="期限（任意）">
       <button type="submit" id="add-btn">追加</button>
     </form>
     <div class="filters">
@@ -168,8 +200,34 @@
   const listEl = document.getElementById('list');
   const formEl = document.getElementById('form');
   const inputEl = document.getElementById('new-todo');
+  const dueEl = document.getElementById('new-due');
   const countEl = document.getElementById('count');
   const remainingEl = document.getElementById('remaining');
+
+  function todayStr() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function formatDue(due) {
+    if (!due) return null;
+    const today = todayStr();
+    const [y, m, d] = due.split('-');
+    const label = `${parseInt(m, 10)}/${parseInt(d, 10)}`;
+    let cls = '';
+    if (due < today) cls = 'overdue';
+    else if (due === today) cls = 'today';
+    let prefix = '期限: ';
+    if (due === today) prefix = '今日: ';
+    else if (due < today) {
+      const diff = Math.floor((new Date(today) - new Date(due)) / 86400000);
+      prefix = `${diff}日経過: `;
+    }
+    return { text: prefix + label, cls };
+  }
 
   function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
@@ -198,9 +256,21 @@
         checkbox.checked = todo.done;
         checkbox.addEventListener('change', () => toggle(todo.id));
 
+        const body = document.createElement('div');
+        body.className = 'body';
+
         const text = document.createElement('span');
         text.className = 'text';
         text.textContent = todo.text;
+        body.appendChild(text);
+
+        const dueInfo = formatDue(todo.due);
+        if (dueInfo) {
+          const dueEl = document.createElement('span');
+          dueEl.className = 'due' + (dueInfo.cls ? ' ' + dueInfo.cls : '');
+          dueEl.textContent = dueInfo.text;
+          body.appendChild(dueEl);
+        }
 
         const del = document.createElement('button');
         del.className = 'delete';
@@ -208,7 +278,7 @@
         del.title = '削除';
         del.addEventListener('click', () => remove(todo.id));
 
-        li.append(checkbox, text, del);
+        li.append(checkbox, body, del);
         listEl.appendChild(li);
       }
     }
@@ -218,10 +288,10 @@
     remainingEl.textContent = `残り ${remaining} 件`;
   }
 
-  function add(text) {
+  function add(text, due) {
     const trimmed = text.trim();
     if (!trimmed) return;
-    todos.push({ id: Date.now() + Math.random(), text: trimmed, done: false });
+    todos.push({ id: Date.now() + Math.random(), text: trimmed, due: due || '', done: false });
     save();
     render();
   }
@@ -243,8 +313,9 @@
 
   formEl.addEventListener('submit', e => {
     e.preventDefault();
-    add(inputEl.value);
+    add(inputEl.value, dueEl.value);
     inputEl.value = '';
+    dueEl.value = '';
     inputEl.focus();
   });
 
