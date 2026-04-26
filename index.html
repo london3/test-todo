@@ -442,6 +442,14 @@
   }
   .calendar-task.has-cat { color: #fff; }
   .calendar-task.done { text-decoration: line-through; opacity: 0.5; }
+  .calendar-task[draggable="true"] { cursor: grab; }
+  .calendar-task[draggable="true"]:active { cursor: grabbing; }
+  .calendar-task.dragging { opacity: 0.4; }
+  .calendar-day.drag-over {
+    background: #ebf4ff;
+    outline: 2px solid #667eea;
+    outline-offset: -2px;
+  }
   .calendar-task.overdue:not(.has-cat):not(.done) {
     background: #fed7d7;
     color: #742a2a;
@@ -663,8 +671,29 @@
 
       const cell = document.createElement('div');
       cell.className = 'calendar-day';
+      cell.dataset.date = ds;
       if (date.getMonth() !== month) cell.classList.add('other-month');
       if (ds === today) cell.classList.add('today');
+
+      cell.addEventListener('dragover', e => {
+        if (!e.dataTransfer.types.includes('application/x-todo-id')) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        cell.classList.add('drag-over');
+      });
+      cell.addEventListener('dragleave', e => {
+        if (e.relatedTarget && cell.contains(e.relatedTarget)) return;
+        cell.classList.remove('drag-over');
+      });
+      cell.addEventListener('drop', e => {
+        e.preventDefault();
+        cell.classList.remove('drag-over');
+        const id = e.dataTransfer.getData('application/x-todo-id');
+        if (!id) return;
+        const todo = todos.find(t => String(t.id) === id);
+        if (!todo || todo.due === ds) return;
+        updateField(todo.id, { due: ds });
+      });
 
       const num = document.createElement('span');
       num.className = 'day-num';
@@ -684,7 +713,19 @@
           chip.style.background = categoryColor(t.category);
         }
         chip.textContent = t.text;
-        chip.title = (t.category ? `[${t.category}] ` : '') + t.text;
+        chip.title = (t.category ? `[${t.category}] ` : '') + t.text + '（クリックで完了/未完了、ドラッグで日付変更）';
+
+        chip.draggable = true;
+        chip.addEventListener('dragstart', e => {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('application/x-todo-id', String(t.id));
+          chip.classList.add('dragging');
+        });
+        chip.addEventListener('dragend', () => {
+          chip.classList.remove('dragging');
+          calGridEl.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+        });
+
         chip.addEventListener('click', () => toggle(t.id));
         cell.appendChild(chip);
       }
